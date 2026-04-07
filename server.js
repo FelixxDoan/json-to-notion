@@ -10,7 +10,7 @@ const { buildContentBlocks } = require('./helpers/blockBuilder');
 const { generateIcon } = require('./helpers/iconGenerator');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.static('public'));
@@ -95,7 +95,7 @@ app.post('/api/sync', upload.single('jsonFile'), async (req, res) => {
       return res.status(400).json({ error: 'No JSON file uploaded' });
     }
 
-    const fileContent = await fs.readFile(req.file.path, 'utf8');
+    const fileContent = req.file.buffer.toString('utf8');
     let jsonDataList;
     try {
       jsonDataList = JSON.parse(fileContent);
@@ -116,7 +116,7 @@ app.post('/api/sync', upload.single('jsonFile'), async (req, res) => {
 
     res.json({ jobId, message: 'Sync started' });
 
-    processSync(jobId, jsonDataList, mappingData, notionToken, cleanedDbId, req.file.path).catch(console.error);
+    processSync(jobId, jsonDataList, mappingData, notionToken, cleanedDbId).catch(console.error);
     
   } catch (error) {
     console.error(error);
@@ -155,7 +155,7 @@ app.get('/api/status/:jobId', (req, res) => {
   });
 });
 
-async function processSync(jobId, dataList, mappingData, token, dbId, filePath) {
+async function processSync(jobId, dataList, mappingData, token, dbId) {
   const notion = new Client({ auth: token });
   const job = jobs[jobId];
   const { propertyMappings = [], contentMappings = [] } = mappingData;
@@ -224,12 +224,6 @@ async function processSync(jobId, dataList, mappingData, token, dbId, filePath) 
   } catch (err) {
     job.status = 'failed';
     job.errors.push(`Fatal error: ${err.message}`);
-  } finally {
-     try {
-       await fs.unlink(filePath);
-     } catch (e) {
-       console.error('File cleanup failed', e);
-     }
   }
 }
 
