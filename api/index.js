@@ -5,15 +5,14 @@ const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
 
-const { propertyBuilder } = require('./helpers/propertyBuilder');
-const { buildContentBlocks } = require('./helpers/blockBuilder');
-const { generateIcon } = require('./helpers/iconGenerator');
+const { propertyBuilder } = require('../helpers/propertyBuilder');
+const { buildContentBlocks } = require('../helpers/blockBuilder');
+const { generateIcon } = require('../helpers/iconGenerator');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 app.use(cors());
-app.use(express.static('public'));
 app.use(express.json());
 
 const jobs = {};
@@ -227,7 +226,4 @@ async function processSync(jobId, dataList, mappingData, token, dbId) {
   }
 }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+module.exports = app;
