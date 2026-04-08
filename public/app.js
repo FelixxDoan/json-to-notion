@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let schemaProperties = [];
+    let currentDataSourceId = null;
 
     function appendLog(message, isError = false) {
         const div = document.createElement('div');
@@ -87,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error(data.error || 'Failed to fetch schema');
 
             schemaProperties = data.properties;
+            currentDataSourceId = data.database?.dataSourceId || null;
 
             // Show sync form
             syncForm.classList.remove('hidden');
@@ -280,6 +282,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('notionToken', notionToken);
         formData.append('databaseId', databaseId);
+        if (currentDataSourceId) {
+            formData.append('dataSourceId', currentDataSourceId);
+        }
         formData.append('jsonFile', file);
         formData.append('mapping', JSON.stringify(mapping));
 
@@ -322,12 +327,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Update Progress
-                const { status, total, current, errors } = jobData;
+                const { status, total, current, errors, successCount = 0 } = jobData;
                 const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
                 
                 progressBar.style.width = `${percentage}%`;
                 statusCount.textContent = `${percentage}%`;
-                statusText.textContent = `Syncing: ${current} / ${total} pages created`;
+                statusText.textContent = `Syncing: ${current} / ${total} rows processed`;
                 submitBtn.innerHTML = `Syncing... ${current}/${total}`;
 
                 // Append any new logs
@@ -339,17 +344,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     window._lastErrorCount = errors.length;
                 }
 
-                if (status === 'completed' || status === 'failed') {
+                if (status === 'completed' || status === 'completed_with_errors' || status === 'failed') {
                     eventSource.close();
                     
                     if (status === 'completed') {
-                        statusText.textContent = `Sync Completed Successfully! (${current}/${total})`;
+                        statusText.textContent = `Sync Completed Successfully! (${successCount}/${total})`;
                         progressBar.classList.remove('from-indigo-500', 'to-cyan-400');
                         progressBar.classList.add('from-green-500', 'to-emerald-400');
                         syncForm.classList.remove('syncing-glow');
-                        appendLog(`Sync Finished! Created ${current} items with ${errors.length} errors.`);
+                        appendLog(`Sync Finished! Created ${successCount} items with ${errors.length} errors.`);
+                    } else if (status === 'completed_with_errors') {
+                        statusText.textContent = `Sync Completed With Errors (${successCount}/${total})`;
+                        progressBar.classList.remove('from-indigo-500', 'to-cyan-400');
+                        progressBar.classList.add('from-amber-500', 'to-orange-400');
+                        syncForm.classList.remove('syncing-glow');
+                        appendLog(`Sync Finished with partial success: ${successCount} created, ${errors.length} failed.`, true);
                     } else {
-                        statusText.textContent = `Sync Failed. Details in log.`;
+                        statusText.textContent = `Sync Failed. Created 0/${total}.`;
                         progressBar.classList.remove('from-indigo-500', 'to-cyan-400');
                         progressBar.classList.add('from-red-500', 'to-orange-500');
                         syncForm.classList.remove('syncing-glow');
