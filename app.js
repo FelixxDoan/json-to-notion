@@ -60,29 +60,38 @@ app.post('/api/schema', async (req, res) => {
 
     const dbInfo = await notion.databases.retrieve({ database_id: dbId });
 
-    if (!dbInfo?.data_sources?.length) {
+    let finalProperties = {};
+    if (dbInfo?.properties) {
+      finalProperties = { ...dbInfo.properties };
+    }
+
+    let dataSourceId = null;
+    if (dbInfo?.data_sources?.length) {
+      dataSourceId = dbInfo.data_sources[0].id;
+      const dsInfo = await notion.dataSources.retrieve({
+        data_source_id: dataSourceId
+      });
+      if (dsInfo?.properties) {
+        finalProperties = { ...finalProperties, ...dsInfo.properties };
+      }
+    }
+
+    if (Object.keys(finalProperties).length === 0) {
       return res.status(400).json({
-        error: 'Database has no accessible data sources.'
+        error: 'Could not read any database properties.'
       });
     }
 
-    const dataSourceId = dbInfo.data_sources[0].id;
-    const dsInfo = await notion.dataSources.retrieve({
-      data_source_id: dataSourceId
-    });
-
-    if (!dsInfo?.properties || typeof dsInfo.properties !== 'object') {
-      return res.status(400).json({
-        error: 'Could not read data source properties.'
-      });
-    }
-
-    const properties = Object.entries(dsInfo.properties).map(([key, value]) => ({
+    const properties = Object.entries(finalProperties).map(([key, value]) => ({
       name: key,
       type: value?.type || 'unknown',
       id: value?.id || null
     }));
 
+    console.log('--- DEBUG PROPERTIES ---');
+    console.log('dbInfo.properties:', dbInfo.properties ? Object.keys(dbInfo.properties) : 'none');
+    console.log('finalProperties keys:', Object.keys(finalProperties));
+    
     return res.json({
       database: {
         id: dbInfo.id,
@@ -191,14 +200,12 @@ async function processSync(jobId, dataList, mappingData, token, parent) {
       const properties = {};
       for (const map of propertyMappings) {
         const val = item[map.jsonKey];
-        if (val !== undefined && val !== null && val !== '') {
-          const prop = propertyBuilder(map.type, val);
-          if (prop) {
-            properties[map.notionCol] = prop;
-          }
-          if (map.type === 'title') {
-            titleText = String(val);
-          }
+        const prop = propertyBuilder(map.type, val);
+        if (prop !== undefined) {
+          properties[map.notionCol] = prop;
+        }
+        if (map.type === 'title' && val !== undefined && val !== null && val !== '') {
+          titleText = String(val);
         }
       }
 
